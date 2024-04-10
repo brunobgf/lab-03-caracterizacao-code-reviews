@@ -29,17 +29,19 @@ def is_review_duration_greater_than_one_hour(review_created_at, pr_merged_at, pr
     return time_difference > timedelta(hours=1)
 
 
-def calculate_pr_interval(pr_created_at, pr_merged_at, pr_closed_at):
-  pr_created_at = datetime.strptime(pr_created_at, '%Y-%m-%dT%H:%M:%SZ') 
-  pr_merged_at = datetime.strptime(pr_merged_at, '%Y-%m-%dT%H:%M:%SZ') if pr_merged_at else None
-  pr_closed_at = datetime.strptime(pr_closed_at, '%Y-%m-%dT%H:%M:%SZ') if pr_closed_at else None
+def calculate_pr_interval(pr_created_at, pr_updated_at, pr_merged_at, pr_closed_at):
+    pr_created_at = datetime.strptime(pr_created_at, '%Y-%m-%dT%H:%M:%SZ')
+    pr_updated_at = datetime.strptime(pr_updated_at, '%Y-%m-%dT%H:%M:%SZ')
+    
+    default_time = datetime.now()
+    pr_merged_at = datetime.strptime(pr_merged_at, '%Y-%m-%dT%H:%M:%SZ') if pr_merged_at else default_time
+    pr_closed_at = datetime.strptime(pr_closed_at, '%Y-%m-%dT%H:%M:%SZ') if pr_closed_at else default_time
 
-  
-  last_activity_time = max(pr_merged_at, pr_closed_at)
+    last_activity_time = max(pr_updated_at, pr_merged_at, pr_closed_at)
 
-  interval = last_activity_time - pr_created_at
+    interval = last_activity_time - pr_created_at
 
-  return interval
+    return interval
 
 
 def search_repositories(end_cursor, headers):
@@ -61,7 +63,7 @@ def search_repositories(end_cursor, headers):
             ... on Repository {
               nameWithOwner
               stargazerCount
-              pullRequests(states: [MERGED, CLOSED], first: 100) {
+              pullRequests(states: [MERGED, CLOSED], first: 50) {
                 totalCount
               }
             }
@@ -78,7 +80,7 @@ def get_pull_requests(owner, repo_name, headers):
     query = """
     {
       repository(owner: "%s", name: "%s") {
-        pullRequests(states: [MERGED, CLOSED], first: 100) {
+        pullRequests(states: [MERGED, CLOSED], first: 50) {
           nodes {
             ... on PullRequest {
               comments {
@@ -93,7 +95,7 @@ def get_pull_requests(owner, repo_name, headers):
               closedAt
               createdAt
               bodyText
-              participants(first: 100) {
+              participants(first: 50) {
               nodes {
                   login
                 }
@@ -115,7 +117,7 @@ def get_repository_commit_stats(owner, repo_name, headers):
         defaultBranchRef {
           target {
             ... on Commit {
-              history(first: 100) {
+              history(first: 50) {
                 edges {
                   node {
                     additions
@@ -157,7 +159,7 @@ headers = {"Authorization": "Bearer " + os.environ['API_TOKEN']}
 index = 1
 repos = []
 end_cursor = "null"
-num_repos = 200
+num_repos = 50
 while len(repos) < num_repos:
     try:
         repositories_data = search_repositories(end_cursor, headers)['data']['search']
@@ -197,7 +199,7 @@ while len(repos) < num_repos:
           'stars': repo['stargazerCount'],
           'total_pr': repo['pullRequests']['totalCount'],
           'total_pr_reviews': total_reviews_pr,
-          'total_repository_files': total_repository_files,
+          'total_repository_files': len(total_repository_files),
           # 'analysis_time': calculate_pr_interval(pr['createdAt'], pr['mergedAt'], pr['closedAt']),
           'number_characters_description': len(list(pr['bodyText'])),
           'number_participants': len(pr['participants']['nodes']),
