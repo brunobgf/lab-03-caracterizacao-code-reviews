@@ -1,11 +1,7 @@
-import requests
-import pandas as pd
-from datetime import datetime
 import os
 import dotenv
+import requests
 import json
-import os
-
 
 def run_query(query, headers):
     request = requests.post('https://api.github.com/graphql', json={'query': query}, headers=headers)
@@ -15,76 +11,103 @@ def run_query(query, headers):
         raise Exception("Query failed to run by returning code of {}. {}".format(request.status_code, request.text))
 
 
-index = 1
-data = []
-end_cursor = "null"
-num_repos = 200
-while len(data) < num_repos:
-  query = '''{
-    search (
+def search_repositories(end_cursor, headers):
+    query = """
+    {
+      search(
         query: "stars:>20000"
         type: REPOSITORY
-        first: 2
-        after: ''' + end_cursor + '''
-      ) {
+        first: 1
+        after: """ + end_cursor + """
+      )
+      {
         pageInfo {
         endCursor
         hasNextPage
-      }
-      edges {
-        node {
-          ... on Repository {
-            nameWithOwner
-            stargazerCount
-            url
-            pullRequests(states: [CLOSED, MERGED], first: 100) {
-              totalCount
-              reviewRequests(first: 100) {
-                nodes {
-                  requestedReviewer {
-                    ... on User {
-                      name
-                      login
-                    }
-                  }
-                }
-              }  
+        } 
+        edges {
+          node {
+            ... on Repository {
+              nameWithOwner
+              pullRequests(states: [MERGED, CLOSED], first: 100) {
+                totalCount
+              }
             }
           }
         }
       }
     }
-  }
-  '''
-  dotenv.load_dotenv()
-  headers = {"Authorization": "Bearer " + os.environ['API_TOKEN']}
+    """
 
-  print(json.dumps(run_query(query, headers), indent=3))
-  input()
+    return run_query(query, headers)
 
-  result = run_query(query, headers)["data"]["search"]
-  end_cursor = "\"" + result["pageInfo"]["endCursor"] + "\"" if result["pageInfo"]["endCursor"] is not None else "null"
-  repositories = []
-  repositories.extend(list(map(lambda x: x['node'], result['edges'])))
+# result = search_repositories('null')['data']['search']
+# repositories = []
+# repositories.extend(list(map(lambda x: x['node'], result['edges'])))
+# print(json.dumps(repositories, indent=2))#repositories[0]["nameWithOwner"]
+# print('Fim')
+# input()
 
-  for repo in repositories:
-      data.append({
-          'name': repo['nameWithOwner'].split('/')[1],
-          'owner': repo['nameWithOwner'].split('/')[0],
-          'url': repo['url'],
-          'stars': repo['stargazerCount'],
-          'index': index
-      })
-      index += 1
 
-print(json.dumps(data, indent=1))
+def get_pull_requests(owner, repo_name, headers):
+    query = """
+    {
+      repository(owner: "%s", name: "%s") {
+        pullRequests(states: [MERGED, CLOSED], first: 100) {
+          nodes {
+            ... on PullRequest {
+              number
+              title
+              reviews(first: 1) {
+                totalCount              
+              }
+              mergedAt
+              closedAt
+              createdAt
+            }
+          }
+        }
+      }
+    }
+    """ % (owner, repo_name)
 
-# df = pd.DataFrame(data=data)
+    return run_query(query, headers)
 
-# if not os.path.exists('./output_repos'):
-#   os.mkdir('./output_repos')
+if __name__ == "__main__":
+    index = 1
+    data = []
+    end_cursor = "null"
+    num_repos = 200
+    while len(data) < num_repos:
+        dotenv.load_dotenv()
+        headers = {"Authorization": "Bearer " + os.environ['API_TOKEN']}
 
-# # df.to_json('./output_repos/repos.json', index=False)
-# df.to_csv('./scripts/output_repos/repos.csv', index=False)
+        try:
+            repositories_data = search_repositories(end_cursor, headers)['data']['search']
+        except:
+            continue
 
-print('Finished')
+        end_cursor = "\"" + repositories_data["pageInfo"]["endCursor"] + "\"" if repositories_data["pageInfo"]["endCursor"] is not None else "null"
+        repositories = []
+        repositories.extend(list(map(lambda x: x['node'], repositories_data['edges'])))
+
+        for repo_edge in repositories:
+            repo_name_with_owner = repo_edge['nameWithOwner']
+            
+            pull_requests_data = get_pull_requests(*repo_name_with_owner.split('/'), headers)
+            
+            for pr_node in pull_requests_data['data']['repository']['pullRequests']['nodes']:
+                print(json.dumps(pr_node, indent=3))
+                input()
+                # input()
+                if int(pr_node['reviews']['totalCount']) > 0:
+                    print('entrei')
+                    data.append({
+                        'pr_number': pr_node['number'],
+                        'pr_title': pr_node['title'],
+                        'pr_reviews_count': pr_node['reviews']['totalCount'],
+                        'index': index
+                    })
+                    index +=1
+                
+    print(json.dumps(data, indent=1))
