@@ -37,8 +37,18 @@ while len(data) < num_repos:
             nameWithOwner
             stargazerCount
             url
-            pullRequests(states: [CLOSED, MERGED]) {
+            pullRequests(states: [CLOSED, MERGED], first: 100) {
               totalCount
+              reviewRequests(first: 100) {
+                nodes {
+                  requestedReviewer {
+                    ... on User {
+                      name
+                      login
+                    }
+                  }
+                }
+              }  
             }
           }
         }
@@ -49,11 +59,11 @@ while len(data) < num_repos:
   dotenv.load_dotenv()
   headers = {"Authorization": "Bearer " + os.environ['API_TOKEN']}
 
-#   print(json.dumps(run_query(query, headers), indent=3))
-#   input()
+  print(json.dumps(run_query(query, headers), indent=3))
+  input()
 
   result = run_query(query, headers)["data"]["search"]
-  end_cursor = "\"" + result["pageInfo"]["endCursor"] + "\"" #if result["pageInfo"]["endCursor"] is not None else "null"
+  end_cursor = "\"" + result["pageInfo"]["endCursor"] + "\"" if result["pageInfo"]["endCursor"] is not None else "null"
   repositories = []
   repositories.extend(list(map(lambda x: x['node'], result['edges'])))
 
