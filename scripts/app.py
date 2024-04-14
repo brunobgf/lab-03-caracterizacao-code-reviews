@@ -12,20 +12,20 @@ def run_query(query, headers):
         return request.json()
     else:
         raise Exception("Query failed to run by returning code of {}. {}".format(request.status_code, request.text))
-    
+
 
 def is_review_duration_greater_than_one_hour(review_created_at, pr_merged_at, pr_closed_at):
     review_created_at = datetime.strptime(review_created_at, '%Y-%m-%dT%H:%M:%SZ')
     pr_merged_at = datetime.strptime(pr_merged_at, '%Y-%m-%dT%H:%M:%SZ') if pr_merged_at else None
     pr_closed_at = datetime.strptime(pr_closed_at, '%Y-%m-%dT%H:%M:%SZ') if pr_closed_at else None
-    
+
     if pr_merged_at:
         time_difference = pr_merged_at - review_created_at
     elif pr_closed_at:
         time_difference = pr_closed_at - review_created_at
     else:
         return False
-    
+
     return time_difference > timedelta(hours=1)
 
 
@@ -54,7 +54,7 @@ def search_repositories(end_cursor, headers):
         pageInfo {
         endCursor
         hasNextPage
-        } 
+        }
         edges {
           node {
             ... on Repository {
@@ -77,16 +77,16 @@ def get_pull_requests(owner, repo_name, headers):
     query = """
     {
       repository(owner: "%s", name: "%s") {
-        pullRequests(states: [MERGED, CLOSED], first: 50) {
+        pullRequests(states: [MERGED, CLOSED], first: 5) {
           nodes {
             ... on PullRequest {
               comments {
                   totalCount
               }
               number
-              title 
+              title
               reviews(first: 1) {
-                totalCount             
+                totalCount
               }
               mergedAt
               closedAt
@@ -174,7 +174,7 @@ while len(repos) < num_repos:
 
       pull_requests = get_pull_requests(*repo_name_with_owner.split('/'), headers)['data']['repository']['pullRequests']['nodes']
 
-      for pr in pull_requests:          
+      for pr in pull_requests:
         if int(pr['reviews']['totalCount']) > 0 and is_review_duration_greater_than_one_hour(pr['createdAt'], pr['mergedAt'], pr['closedAt']):
           total_reviews_pr += int(pr['reviews']['totalCount'])
 
