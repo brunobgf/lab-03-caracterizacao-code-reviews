@@ -2,7 +2,7 @@ import os
 import dotenv
 import requests
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pandas as pd
 
 
@@ -29,19 +29,16 @@ def is_review_duration_greater_than_one_hour(review_created_at, pr_merged_at, pr
     return time_difference > timedelta(hours=1)
 
 
-def calculate_pr_interval(pr_created_at, pr_updated_at, pr_merged_at, pr_closed_at):
-    pr_created_at = datetime.strptime(pr_created_at, '%Y-%m-%dT%H:%M:%SZ')
-    pr_updated_at = datetime.strptime(pr_updated_at, '%Y-%m-%dT%H:%M:%SZ')
-    
-    default_time = datetime.now()
-    pr_merged_at = datetime.strptime(pr_merged_at, '%Y-%m-%dT%H:%M:%SZ') if pr_merged_at else default_time
-    pr_closed_at = datetime.strptime(pr_closed_at, '%Y-%m-%dT%H:%M:%SZ') if pr_closed_at else default_time
+def calculate_pr_interval(created_at, merged_at, closed_at): 
+  if merged_at:
+      end_time = datetime.strptime(merged_at, "%Y-%m-%dT%H:%M:%SZ")
+  else:
+      end_time = datetime.strptime(closed_at, "%Y-%m-%dT%H:%M:%SZ")
 
-    last_activity_time = max(pr_updated_at, pr_merged_at, pr_closed_at)
+  start_time = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
+  age = end_time - start_time
 
-    interval = last_activity_time - pr_created_at
-
-    return interval
+  return age.total_seconds() / 3600
 
 
 def search_repositories(end_cursor, headers):
@@ -200,7 +197,7 @@ while len(repos) < num_repos:
           'total_pr': repo['pullRequests']['totalCount'],
           'total_pr_reviews': total_reviews_pr,
           'total_repository_files': len(total_repository_files),
-          # 'analysis_time': calculate_pr_interval(pr['createdAt'], pr['mergedAt'], pr['closedAt']),
+          'analysis_time': calculate_pr_interval(pr['createdAt'], pr['mergedAt'], pr['closedAt']),
           'number_characters_description': len(list(pr['bodyText'])),
           'number_participants': len(pr['participants']['nodes']),
           'total_comments_pr': pr['comments']['totalCount'],
