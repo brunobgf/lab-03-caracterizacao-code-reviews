@@ -4,6 +4,20 @@ import requests
 import json
 from datetime import datetime, timedelta, date
 import pandas as pd
+import time
+
+# It can be added more tokens here
+tokens = ['TOKEN 1', 'TOKEN 2']
+current_token_index = 0
+
+def get_current_token():
+    global current_token_index
+    return tokens[current_token_index]
+
+def switch_token():
+    global current_token_index
+    current_token_index = (current_token_index + 1) % len(tokens)
+
 
 
 def run_query(query, headers):
@@ -151,19 +165,35 @@ def get_repository_files(owner, repo_name, headers):
 
 
 dotenv.load_dotenv()
-headers = {"Authorization": "Bearer " + os.environ['API_TOKEN']}
+headers = {"Authorization": "Bearer " + get_current_token()}
 
 index = 1
 repos = []
 end_cursor = "null"
-num_repos = 50
+num_repos = 200
+calls_counter = 0
 while len(repos) < num_repos:
     try:
+        calls_counter +=1
+
+        if calls_counter > 20:
+          switch_token()
+          calls_counter = 0
+
         repositories_data = search_repositories(end_cursor, headers)['data']['search']
+
+        if 'errors' in repositories_data:
+          print("GraphQL query failed:", data['errors'])
+          print("Waiting for 60 seconds before retrying...")
+          time.sleep(60)
+          continue
+
     except:
         continue
 
     end_cursor = "\"" + repositories_data["pageInfo"]["endCursor"] + "\"" if repositories_data["pageInfo"]["endCursor"] is not None else "null"
+    time.sleep(1)
+    
     repositories = []
     repositories.extend(list(map(lambda x: x['node'], repositories_data['edges'])))
 
@@ -206,6 +236,7 @@ while len(repos) < num_repos:
           'grand_total_rows_added_and_removed': grand_total_rows_added_and_removes,
           'index': index
         })
+
         index +=1
 
 print(json.dumps(repos, indent=1))
@@ -215,6 +246,6 @@ df = pd.DataFrame(data=repos)
 if not os.path.exists('./dataset'):
   os.mkdir('./dataset')
 
-df.to_csv('./scripts/dataset/repos.csv', index=False)
+df.to_csv('./dataset/repos.csv', index=False)
 
 print('Finished')
