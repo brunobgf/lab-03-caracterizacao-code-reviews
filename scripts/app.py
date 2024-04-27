@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 import time
 
-tokens = ['TOKEN 1', 'TOKEN 2', 'TOKEN 3']
+tokens = ['TOKEN 1', 'TOKEN 2', 'TOKEN 3', 'TOKEN 4']
 current_token_index = 0
 
 def get_current_token():
@@ -204,7 +204,7 @@ while len(repos) < num_repos:
 
       attempts = 0
 
-      while attempts < 6:
+      while attempts < 8:
         try:
           pull_requests = get_pull_requests(*repo_name_with_owner.split('/'), headers)['data']['repository']['pullRequests']['nodes']
           switch_token()
@@ -219,14 +219,14 @@ while len(repos) < num_repos:
         if int(pr['reviews']['totalCount']) > 0 and is_review_duration_greater_than_one_hour(pr['createdAt'], pr['mergedAt'], pr['closedAt']):
           total_reviews_pr += int(pr['reviews']['totalCount'])
 
-      if total_reviews_pr > 0:
+      if (total_reviews_pr > 0 and is_review_duration_greater_than_one_hour(pr['createdAt'], pr['mergedAt'], pr['closedAt'])):
 
         grand_total_rows_added_and_removes = 0
         total_rows_added = 0
         total_rows_removed = 0
         getCommitStatsAttempt = 0
 
-        while getCommitStatsAttempt < 6:
+        while getCommitStatsAttempt < 8:
           try:
             for commit in get_repository_commit_stats(*repo_name_with_owner.split('/'), headers)['data']['repository']['defaultBranchRef']['target']['history']['edges']:
               total_rows_added += commit['node']['additions']
